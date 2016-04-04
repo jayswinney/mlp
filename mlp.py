@@ -153,19 +153,20 @@ if __name__ == '__main__':
     from sklearn.metrics import classification_report
 
     X, Y = load_digits()['data'], load_digits()['target']
+
     onehot = OneHotEncoder(sparse = False)
-    Y = onehot.fit_transform(np.atleast_2d(Y)).T
+    Y = onehot.fit_transform(np.atleast_2d(Y).T)
 
     train_x, test_x, train_y, test_y = train_test_split( X, Y,
         test_size = 0.3)
 
-    nn = mlp([X.shape[1], 2*X.shape[1], 10])
-    # print(nn)
-    print(train_y)
-    exit()
+    test_y = np.argmax(test_y, 1)
+
+    nn = mlp([X.shape[1], 30, 10])
+    print(nn)
     yhat = np.argmax(nn.feed_forward(test_x), 1)
     print(classification_report(test_y, yhat))
-    nn.gradient_descent(train_x, train_y, 200, 10)
+    nn.gradient_descent(train_x, train_y, 50000, 100, a = 1e-2)
     yhat = np.argmax(nn.feed_forward(test_x), 1)
     print(classification_report(test_y, yhat))
 
