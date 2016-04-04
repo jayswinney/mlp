@@ -3,6 +3,7 @@
 import numpy as np
 from sklearn.metrics import log_loss
 
+
 sig = lambda x: 1.0/(1.0+np.exp(-x))
 sig_d = lambda x: sig(x) * (1 - sig(x))
 sig_to_d = lambda x: x * (1 - x)
@@ -10,6 +11,9 @@ sig_to_d = lambda x: x * (1 - x)
 
 def print_shape(f):
     print(list(map(lambda x: x.shape, f)))
+
+def get_shape(f):
+    return str(list(map(lambda x: x.shape, f)))
 
 class mlp:
 
@@ -27,6 +31,11 @@ class mlp:
 
         self.biases = [np.random.randn(x) for x in layer_sizes[1:]]
 
+    def __str__(self):
+
+        out = 'weights:' + get_shape(self.weights)
+        out += ', biases:' + get_shape(self.biases)
+        return out
 
     def feed_forward(self, X):
         '''
@@ -64,7 +73,29 @@ class mlp:
             if i != 0:
                 delta = np.dot(delta, self.weights[i].T) * sig_to_d(self.a[i])
 
-        return list(reversed(ddw)), list(reversed(ddb))
+        return list(reversed(ddw)), [b.sum(axis = 0) for b in reversed(ddb)]
+
+    def gradient_descent(self, X, Y, itterations, batch_size, a = 1e-2):
+        '''
+        Parameters
+        ----------
+
+        Returns
+        -------
+        '''
+        assert batch_size <= X.shape[0]
+        assert X.shape[0] == Y.shape[0], 'X and Y different lengths'
+
+        n_batches = X.shape[0] // batch_size
+        batches = np.array_split(range(X.shape[0]), n_batches)
+
+        for i in range(itterations):
+            for b in batches:
+                ddw, ddb = self.back_propigation(X[b], Y[b])
+                for j in range(len(self.weights)):
+                    self.weights[j] -= ddw[j] * a
+                    self.biases[j] -= ddb[j] * a
+
 
 
     def gradient_checking(self, X, Y):
@@ -116,27 +147,52 @@ class mlp:
 
 
 if __name__ == '__main__':
-    nn = mlp([2, 2, 1])
+    from sklearn.datasets import load_digits
+    from sklearn.preprocessing import OneHotEncoder
+    from sklearn.cross_validation import train_test_split
+    from sklearn.metrics import classification_report
 
-    X = np.array([[10, 10]])
-                #   [0,1],
-                #   [1,0],
-                #   [1,1]])
+    X, Y = load_digits()['data'], load_digits()['target']
+    onehot = OneHotEncoder(sparse = False)
+    Y = onehot.fit_transform(np.atleast_2d(Y)).T
 
-    Y = np.array([[0]])
-    			#   [1],
-    			#   [1],
-    			#   [0]])
+    train_x, test_x, train_y, test_y = train_test_split( X, Y,
+        test_size = 0.3)
+
+    nn = mlp([X.shape[1], 2*X.shape[1], 10])
+    # print(nn)
+    print(train_y)
+    exit()
+    yhat = np.argmax(nn.feed_forward(test_x), 1)
+    print(classification_report(test_y, yhat))
+    nn.gradient_descent(train_x, train_y, 200, 10)
+    yhat = np.argmax(nn.feed_forward(test_x), 1)
+    print(classification_report(test_y, yhat))
+
+
+
+
+    # nn = mlp([2, 2, 1])
     #
-    grad_approx = nn.gradient_checking(X, Y)
-    bp = nn.back_propigation(X,Y)
-    for i,j in zip(grad_approx, bp[0]):
-        print(i, j, sep =  '\n\n')
-        print('\n', 'difference:')
-        print(i - j, '\n\n')
-    # print(grad_approx[-1])
-    # first_dd = nn.simple_bp(X, Y)
-    # print(first_dd)
-    # print(grad_approx[-1], first_dd)
-    # print(grad_approx[-1] - first_dd)
-    # nn.back_propigation(X, Y)
+    # X = np.array([[10, 10]])
+    #             #   [0,1],
+    #             #   [1,0],
+    #             #   [1,1]])
+    #
+    # Y = np.array([[0]])
+    # 			#   [1],
+    # 			#   [1],
+    # 			#   [0]])
+    # #
+    # grad_approx = nn.gradient_checking(X, Y)
+    # bp = nn.back_propigation(X,Y)
+    # for i,j in zip(grad_approx, bp[0]):
+    #     print(i, j, sep =  '\n\n')
+    #     print('\n', 'difference:')
+    #     print(i - j, '\n\n')
+    # # print(grad_approx[-1])
+    # # first_dd = nn.simple_bp(X, Y)
+    # # print(first_dd)
+    # # print(grad_approx[-1], first_dd)
+    # # print(grad_approx[-1] - first_dd)
+    # # nn.back_propigation(X, Y)
