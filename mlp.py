@@ -37,7 +37,7 @@ class mlp:
         out += ', biases:' + get_shape(self.biases)
         return out
 
-    def feed_forward(self, X):
+    def feed_forward(self, X, dropout=False, dropout_percent=0.5):
         '''
         Parameters
         ----------
@@ -55,14 +55,24 @@ class mlp:
         self.a = [a]
         for w, b in zip(self.weights, self.biases):
             z = np.dot(a, w) + b
-            a = sig(z)
+            if dropout:
+                drop_mat = np.random.binomial(
+                                [np.ones(z.shape)], 1-dropout_percent)[0] * (
+                                1.0/(1-dropout_percent)
+                            )
+                a = sig(z)
+                print(z.shape)
+                z *= drop_mat
+                print(z.shape)
+                a *= drop_mat
+
             self.z.append(z)
             self.a.append(a)
 
         return a
 
-    def back_propigation(self, X, Y):
-        self.feed_forward(X)
+    def back_propigation(self, X, Y, dropout=False, dropout_percent=0.5):
+        self.feed_forward(X, dropout, dropout_percent)
         ddw = []
         ddb = []
         delta = -(Y - self.a[-1]) * sig_to_d(self.a[-1])
@@ -75,7 +85,8 @@ class mlp:
 
         return list(reversed(ddw)), [b.sum(axis = 0) for b in reversed(ddb)]
 
-    def gradient_descent(self, X, Y, itterations, batch_size, a = 1e-2):
+    def gradient_descent(self, X, Y, itterations, batch_size, a = 1e-2,
+                         dropout=False, dropout_percent=0.5):
         '''
         Parameters
         ----------
@@ -91,12 +102,30 @@ class mlp:
 
         for i in range(itterations):
             for b in batches:
-                ddw, ddb = self.back_propigation(X[b], Y[b])
+                ddw, ddb = self.back_propigation(X[b], Y[b],
+                                                 dropout, dropout_percent)
                 for j in range(len(self.weights)):
                     self.weights[j] -= ddw[j] * a
                     self.biases[j] -= ddb[j] * a
 
+    def predict(self, X):
+        '''
+            feed_forward without recording activations or using dropout
+            Parameters
+            ----------
+                X : numpy.array shape(records, features)
 
+            Returns
+            -------
+                a : numpy.array
+                    output of neural network
+        '''
+        assert X.shape[1] == self.weights[0].shape[0], 'input X is wrong shape'
+        a = X
+        for w, b in zip(self.weights, self.biases):
+            z = np.dot(a, w) + b
+            a = sig(z)
+        return a
 
     def gradient_checking(self, X, Y):
         '''
@@ -161,14 +190,16 @@ if __name__ == '__main__':
         test_size = 0.3)
 
     test_y = np.argmax(test_y, 1)
+    train_y2 = np.argmax(train_y, 1)
 
-    nn = mlp([X.shape[1], 30, 10])
+    nn = mlp([X.shape[1], 100, 100, 10])
+    yhat = np.argmax(nn.feed_forward(train_x), 1)
+    # nn.gradient_descent(train_x, train_y, 10, 100, a = 1e-1)
+    # nn.gradient_descent(train_x, train_y, 9000, 100, a = 1e-2)
+    nn.gradient_descent(train_x, train_y, 1000, 100, a = 1e-4, dropout = True)
+    yhat = np.argmax(nn.feed_forward(train_x), 1)
     print(nn)
-    yhat = np.argmax(nn.feed_forward(test_x), 1)
-    print(classification_report(test_y, yhat))
-    nn.gradient_descent(train_x, train_y, 50000, 100, a = 1e-2)
-    yhat = np.argmax(nn.feed_forward(test_x), 1)
-    print(classification_report(test_y, yhat))
+    print(classification_report(train_y2, yhat))
 
 
 
