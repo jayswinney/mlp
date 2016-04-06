@@ -2,9 +2,10 @@
 
 import numpy as np
 from sklearn.metrics import log_loss
+from scipy.special import expit
 
-
-sig = lambda x: 1.0/(1.0+np.exp(-x))
+# sig = lambda x: 1.0/(1.0+np.exp(-x))
+sig = expit
 sig_d = lambda x: sig(x) * (1 - sig(x))
 sig_to_d = lambda x: x * (1 - x)
 # log_loss = lambda y,yhat: np.sum(-(y*np.log(yhat) + (1 - y)*np.log(1-yhat)))
@@ -32,7 +33,6 @@ class mlp:
         self.biases = [np.random.randn(x) for x in layer_sizes[1:]]
 
     def __str__(self):
-
         out = 'weights:' + get_shape(self.weights)
         out += ', biases:' + get_shape(self.biases)
         return out
@@ -53,21 +53,22 @@ class mlp:
         a = X
         self.z = []
         self.a = [a]
+        l = len(self.weights)
+        i = 0
         for w, b in zip(self.weights, self.biases):
             z = np.dot(a, w) + b
-            if dropout:
+            a = sig(z)
+            if dropout and i > 0 and i != l-1:
                 drop_mat = np.random.binomial(
                                 [np.ones(z.shape)], 1-dropout_percent)[0] * (
                                 1.0/(1-dropout_percent)
                             )
-                a = sig(z)
-                print(z.shape)
                 z *= drop_mat
-                print(z.shape)
                 a *= drop_mat
 
             self.z.append(z)
             self.a.append(a)
+            i += 1
 
         return a
 
@@ -173,16 +174,18 @@ class mlp:
 
         return grad_approx
 
-
-
-if __name__ == '__main__':
+def main():
     from sklearn.datasets import load_digits
     from sklearn.preprocessing import OneHotEncoder
     from sklearn.cross_validation import train_test_split
     from sklearn.metrics import classification_report
+    import pandas as pd
 
-    X, Y = load_digits()['data'], load_digits()['target']
+    fp = '/home/jay/projects/mlp/'
 
+    df = pd.read_csv(fp + 'train.csv')
+
+    X, Y = df.drop('label', 1).values, df['label'].values
     onehot = OneHotEncoder(sparse = False)
     Y = onehot.fit_transform(np.atleast_2d(Y).T)
 
@@ -192,39 +195,40 @@ if __name__ == '__main__':
     test_y = np.argmax(test_y, 1)
     train_y2 = np.argmax(train_y, 1)
 
-    nn = mlp([X.shape[1], 100, 100, 10])
+    nn = mlp([X.shape[1], 100, 10])
+    # nn = mlp([X.shape[1], 100, 10])
     yhat = np.argmax(nn.feed_forward(train_x), 1)
     # nn.gradient_descent(train_x, train_y, 10, 100, a = 1e-1)
     # nn.gradient_descent(train_x, train_y, 9000, 100, a = 1e-2)
-    nn.gradient_descent(train_x, train_y, 1000, 100, a = 1e-4, dropout = True)
-    yhat = np.argmax(nn.feed_forward(train_x), 1)
+    # nn.gradient_descent(train_x, train_y, 50, 10, a=1e-1,
+    #                     dropout=False, dropout_percent=0.5)
+
+    # nn.gradient_descent(train_x, train_y, 50, 10, a=1e-2,
+    #                     dropout=False, dropout_percent=0.5)
+
+    nn.gradient_descent(train_x, train_y, 500, 10, a=1e-3,
+                        dropout=True, dropout_percent=0.5)
+
+    nn.gradient_descent(train_x, train_y, 500, 10, a=1e-4,
+                        dropout=True, dropout_percent=0.5)
+
+    yhat = np.argmax(nn.predict(test_x), 1)
     print(nn)
-    print(classification_report(train_y2, yhat))
+    print(classification_report(test_y, yhat))
 
 
-
+if __name__ == '__main__':
+    main()
 
     # nn = mlp([2, 2, 1])
     #
-    # X = np.array([[10, 10]])
-    #             #   [0,1],
-    #             #   [1,0],
-    #             #   [1,1]])
+    # X = np.array([[0,0],
+    #               [0,1],
+    #               [1,0],
+    #               [1,1]])
     #
-    # Y = np.array([[0]])
-    # 			#   [1],
-    # 			#   [1],
-    # 			#   [0]])
-    # #
-    # grad_approx = nn.gradient_checking(X, Y)
-    # bp = nn.back_propigation(X,Y)
-    # for i,j in zip(grad_approx, bp[0]):
-    #     print(i, j, sep =  '\n\n')
-    #     print('\n', 'difference:')
-    #     print(i - j, '\n\n')
-    # # print(grad_approx[-1])
-    # # first_dd = nn.simple_bp(X, Y)
-    # # print(first_dd)
-    # # print(grad_approx[-1], first_dd)
-    # # print(grad_approx[-1] - first_dd)
-    # # nn.back_propigation(X, Y)
+    # Y = np.array([[0, 1, 1, 0]]).T
+    #
+    # nn.gradient_descent(X, Y, 1000, 4, dropout=True)
+    # for x in [(i[0],j[0]) for i,j in zip(nn.predict(X), Y)]:
+    #     print(x)
